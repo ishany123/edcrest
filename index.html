@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Projectile (with Air Resistance) – POC</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+    <header class="topbar">
+        <h1>Projectile Motion (Quadratic Drag)</h1>
+        <p class="muted">Pause and click the projectile to inspect state (t, x, y, v, vx, vy, KE, PE).</p>
+    </header>
+
+    <main class="layout">
+        <section class="panel">
+            <h2>Controls</h2>
+            <div class="row buttons">
+                <button id="startBtn">Start</button>
+                <button id="pauseBtn" disabled>Pause</button>
+                <button id="resetBtn">Reset</button>
+            </div>
+
+            <details class="help" open>
+                <summary>About this POC</summary>
+                <ul>
+                    <li>Numerics in a <b>Web Worker</b>; UI draws on <b>Canvas</b>.</li>
+                    <li>Click the projectile <b>after pausing</b> to view details.</li>
+                </ul>
+            </details>
+        </section>
+
+        <section class="stage">
+            <canvas id="canvas" aria-label="Simulation canvas" role="img"></canvas>
+            <div id="tooltip" class="tooltip hidden" role="dialog" aria-live="polite"></div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <span>POC • Vanilla JS • Worker + Canvas</span>
+    </footer>
+
+    <script src="main.js" defer></script>
+</body>
+
+</html>

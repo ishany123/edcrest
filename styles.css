@@ -1,0 +1,150 @@
+:root {
+    --bg: #0b1020;
+    --panel: #121a34;
+    --muted: #9aa3b2;
+    --text: #e8ecf3;
+    --accent: #5ec2ff;
+    --accent-2: #6fff9f;
+}
+
+* {
+    box-sizing: border-box
+}
+
+html,
+body {
+    height: 100%
+}
+
+body {
+    margin: 0;
+    font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Arial, sans-serif;
+    color: var(--text);
+    background: radial-gradient(1000px 600px at 10% -10%, #162047 0%, var(--bg) 40%) fixed;
+}
+
+.topbar {
+    padding: 16px 20px;
+    border-bottom: 1px solid #1c274f
+}
+
+.topbar h1 {
+    margin: 0;
+    font-size: 20px
+}
+
+.muted {
+    color: var(--muted);
+    font-size: 12px
+}
+
+.layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 16px;
+    padding: 16px
+}
+
+@media (max-width:900px) {
+    .layout {
+        grid-template-columns: 1fr
+    }
+}
+
+.panel {
+    background: var(--panel);
+    border: 1px solid #1c274f;
+    border-radius: 12px;
+    padding: 12px
+}
+
+.panel h2 {
+    margin: 0 0 8px 0;
+    font-size: 16px
+}
+
+.buttons {
+    display: flex;
+    gap: 8px
+}
+
+button {
+    padding: 8px 12px;
+    border: 1px solid #2a355f;
+    background: #0d1430;
+    color: var(--text);
+    border-radius: 8px;
+    cursor: pointer
+}
+
+button[disabled] {
+    opacity: .6;
+    cursor: not-allowed
+}
+
+#startBtn {
+    border-color: #26618a
+}
+
+#resetBtn {
+    border-color: #5a2a2a
+}
+
+.help {
+    margin-top: 12px;
+    color: var(--muted)
+}
+
+.stage {
+    position: relative;
+    min-height: 420px;
+    border: 1px solid #1c274f;
+    border-radius: 12px;
+    overflow: hidden;
+    background: linear-gradient(#0b1020, #0a0d1f)
+}
+
+#canvas {
+    width: 100%;
+    height: min(70vh, 650px);
+    display: block
+}
+
+.tooltip {
+    position: absolute;
+    min-width: 180px;
+    max-width: 260px;
+    padding: 10px 12px;
+    background: #0d1430;
+    border: 1px solid #2a355f;
+    border-radius: 10px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .45);
+    color: var(--text);
+    font-size: 12px;
+    pointer-events: none
+}
+
+.tooltip.hidden {
+    display: none
+}
+
+.tooltip .title {
+    font-weight: 700;
+    margin-bottom: 4px
+}
+
+.tooltip .row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px
+}
+
+.tooltip .k {
+    color: var(--muted)
+}
+
+.footer {
+    padding: 10px 16px;
+    color: var(--muted);
+    border-top: 1px solid #1c274f
+}
