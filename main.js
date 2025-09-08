@@ -31,7 +31,7 @@
     // Controls
     startBtn.addEventListener('click', () => {
         if (worker) worker.terminate();
-        worker = new Worker('worker.js'); // served from same folder
+        worker = new Worker('worker.js'); 
         worker.onmessage = (e) => {
             const msg = e.data;
             if (msg.type === 'tick') {
@@ -55,7 +55,7 @@
         pauseBtn.disabled = false;
         pauseBtn.textContent = 'Pause';
         hideTooltip();
-        worker.postMessage({ type: 'start' }); // uses defaults inside worker (edit there)
+        worker.postMessage({ type: 'start' }); 
     });
 
     pauseBtn.addEventListener('click', () => {
@@ -169,7 +169,7 @@
 
     function showTooltip(px, py) {
         // Calculate energies from current state
-        const m = 0.145; // (kg) — keep in sync with worker default or pass from worker if you expose it
+        const m = 0.145; // (kg) 
         const g = 9.81;  // (m/s^2)
         const KE = 0.5 * m * current.v * current.v;
         const PE = m * g * Math.max(0, current.y);

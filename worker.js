@@ -5,6 +5,8 @@
   a_y = -g     -(k/m) * |v_rel| * v_rel_y
   where k = 0.5 * rho * Cd * A
 */
+const SPEED = 0.25
+const MAX_STEPS = 10;
 
 // Default parameters (edit as needed or extend to accept from main)
 const params = {
@@ -24,6 +26,9 @@ let running = false;
 let state = null; // {x,y,vx,vy,t}
 let loopTimer = null;
 
+let lastReal = 0;     // ms timestamp of last frame
+let acc = 0;          // accumulated (scaled) seconds to integrate
+
 self.onmessage = (e) => {
     const msg = e.data;
     try {
@@ -31,9 +36,12 @@ self.onmessage = (e) => {
             start();
         } else if (msg.type === 'pause') {
             running = false;
+            clearTimer();
         } else if (msg.type === 'resume') {
+            if (!state) return;
             running = true;
-            tickLoop();
+            lastReal = performance.now();
+            loop();
         }
     } catch (err) {
         postMessage({ type: 'error', message: String(err?.message || err) });
@@ -50,8 +58,10 @@ function start() {
         t: 0
     };
     running = true;
+    acc = 0;
+    lastReal = performance.now();
     clearTimer();
-    tickLoop();
+    loop();
 }
 
 function accel(vx, vy) {
@@ -88,16 +98,29 @@ function stepRK4() {
     s.t += dt;
 }
 
-function tickLoop() {
+function loop() {
     if (!running) return;
 
+    const now = performance.now();
+    acc += ((now - lastReal) / 1000) * SPEED;
+    lastReal = now;
+
     const batch = [];
-    // Generate ~60 FPS by batching a few physics steps per tick
-    for (let i = 0; i < 5; i++) {
+    let steps = 0;
+
+    while (acc >= params.dt && steps < MAX_STEPS) {
         stepRK4();
-        if (state.y < 0 || state.t >= params.maxT) { running = false; break; }
+        acc -= params.dt;
+        steps++;
+
+        if (state.y < 0 || state.t >= params.maxT) {
+            running = false;
+            break;
+        }
+
         batch.push({ x: state.x, y: state.y, t: state.t, v: Math.hypot(state.vx, state.vy) });
     }
+
 
     if (batch.length) {
         postMessage({
@@ -111,6 +134,7 @@ function tickLoop() {
         postMessage({ type: 'done' });
         return;
     }
+    
     loopTimer = setTimeout(tickLoop, 16);
 }
 
