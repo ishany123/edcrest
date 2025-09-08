@@ -134,8 +134,8 @@ function loop() {
         postMessage({ type: 'done' });
         return;
     }
-    
-    loopTimer = setTimeout(tickLoop, 16);
+
+    loopTimer = setTimeout(loop, 16);
 }
 
 function clearTimer() { if (loopTimer) { clearTimeout(loopTimer); loopTimer = null; } }
