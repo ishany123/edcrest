@@ -8,12 +8,12 @@
 */
 
 // Wall-clock pacing (0.25× real-time)
-const SPEED = 0.25
+let SPEED = 0.25
 // Safety cap: prevent any single loop from doing too many physics steps
 const MAX_STEPS = 10;
 
 // Default parameters
-const params = {
+const defaults = {
     v0: 30,           // m/s
     angleDeg: 45,     // degrees
     m: 0.145,         // kg (baseball-ish)
@@ -27,6 +27,7 @@ const params = {
 };
 
 // Worker-local state
+let params = { ...defaults }; // set to default parameters
 let running = false; // loop is active
 let state = null; // {x,y,vx,vy,t}
 let loopTimer = null; // setTimeout handle
@@ -38,6 +39,8 @@ self.onmessage = (e) => {
     const msg = e.data;
     try {
         if (msg.type === 'start') {
+            applyParams(msg.params);
+            if (Number.isFinite(+msg.speed) && msg.speed > 0) SPEED = +msg.speed;
             start();
         } else if (msg.type === 'pause') {
             running = false;
@@ -47,11 +50,23 @@ self.onmessage = (e) => {
             running = true;
             lastReal = performance.now(); // reset wall-clock origin
             loop();
+        } else if (msg.type === 'setSpeed') {
+            if (Number.isFinite(+msg.speed) && +msg.speed > 0) SPEED = +msg.speed;
         }
     } catch (err) {
         postMessage({ type: 'error', message: String(err?.message || err) });
     }
 };
+
+function applyParams(p = {}) {
+    // sanitize incoming; only allow known keys
+    const next = { ...params };
+    if (Number.isFinite(+p.v0) && +p.v0 >= 0) next.v0 = +p.v0;
+    if (Number.isFinite(+p.angleDeg)) next.angleDeg = Math.min(90, Math.max(0, +p.angleDeg));
+    if (Number.isFinite(+p.cd) && +p.cd >= 0) next.cd = +p.cd;
+    if (Number.isFinite(+p.wind)) next.wind = +p.wind;
+    params = next;
+}
 
 // Initialize state, post the initial point, and start paced loop
 function start() {

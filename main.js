@@ -7,26 +7,51 @@
     const startBtn = $('startBtn');
     const pauseBtn = $('pauseBtn');
     const resetBtn = $('resetBtn');
-    const tooltip = $('tooltip');
+
+    // Inputs
+    const v0El = $('v0');
+    const angleEl = $('angle');
+    const cdEl = $('cd');
+    const windEl = $('wind');
+    const speedEl = $('speed');
+    const applyBtn = $('applyBtn');
 
     // HUD elements
     const hudXEl = $('hudX');
     const hudYEl = $('hudY');
+    const tooltip = $('tooltip');
 
+    // Observe container to avoid first-paint race
+    const stageEl = document.querySelector('.stage');
 
     // Hi-DPI support: match the backing store to CSS size * devicePixelRatio
     function fitCanvas() {
         const dpr = Math.max(1, window.devicePixelRatio || 1);
         const rect = canvas.getBoundingClientRect();
-        // Size the bitmap buffer; keep a minimum so very small containers still work
-        canvas.width = Math.max(300, Math.floor(rect.width * dpr));
-        canvas.height = Math.max(300, Math.floor(rect.height * dpr));
-        // Draw in CSS pixel coordinates (so it can think in CSS pixels everywhere)
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0); 
+        const cssW = Math.floor(rect.width);
+        const cssH = Math.floor(rect.height);
+
+        if (cssW <= 0 || cssH <= 0) {
+            requestAnimationFrame(fitCanvas);
+            return;
+        }
+        const bw = Math.max(300, Math.floor(cssW * dpr));
+        const bh = Math.max(300, Math.floor(cssH * dpr));
+        if (canvas.width !== bw || canvas.height !== bh) {
+            canvas.width = bw; canvas.height = bh;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+        draw();
     }
-    new ResizeObserver(fitCanvas).observe(canvas);
+    const ro = new ResizeObserver(() => { fitCanvas(); });
+    ro.observe(stageEl);
     window.addEventListener('resize', fitCanvas, { passive: true });
-    fitCanvas();
+    if (document.readyState === 'complete')
+        fitCanvas();
+    else
+        window.addEventListener('load', fitCanvas, { once: true });
+    requestAnimationFrame(fitCanvas);
+
 
     // --- Simulation state (UI side)
     let worker = null; // Web Worker instance (physics thread)
@@ -36,8 +61,28 @@
     let current = { x: 0, y: 0, t: 0, vx: 0, vy: 0, v: 0 }; // most recent state from worker
     let transforms = null;   // cached physics→pixel mapping
 
-    // Controls
-    startBtn.addEventListener('click', () => {
+    // ---- Helpers: read inputs
+    function num(el, fallback) {
+        const n = parseFloat(el.value);
+        return Number.isFinite(n) ? n : fallback;
+    }
+
+    function readParams() {
+        return {
+            v0: Math.max(0, num(v0El, 30)),
+            angleDeg: Math.min(90, Math.max(0, num(angleEl, 45))),
+            cd: Math.max(0, num(cdEl, 0.47)),
+            wind: num(windEl, 0)
+        };
+    }
+
+    function readSpeed() {
+        const s = parseFloat(speedEl.value);
+        return Number.isFinite(s) && s > 0 ? s : 0.25;
+    }
+
+    // Start/restart with current inputs
+    function startWithInputs() {
         if (worker) worker.terminate();
         worker = new Worker('worker.js');
 
@@ -75,9 +120,12 @@
         updateHUD(0, 0);
         draw(); // draw frame with axes/ticks before points arrive
 
-        // Kick off physics
-        worker.postMessage({ type: 'start' });
-    });
+        // Kick off physics with parameters + speed
+        worker.postMessage({ type: 'start', params: readParams(), speed: readSpeed() });
+    }
+
+    // Controls
+    startBtn.addEventListener('click', startWithInputs);
 
     pauseBtn.addEventListener('click', () => {
         if (!running) return;
@@ -104,8 +152,15 @@
         pauseBtn.textContent = 'Pause';
         hideTooltip();
         updateHUD(0, 0);
-        ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
         draw(); // redraw axes/ticks with empty trajectory
+    });
+
+    // Apply & Restart with new params
+    applyBtn.addEventListener('click', startWithInputs);
+
+    // Live-change sim speed while running
+    speedEl.addEventListener('change', () => {
+        if (worker) worker.postMessage({ type: 'setSpeed', speed: readSpeed() });
     });
 
     // Only allow clicking the projectile when paused or finished
@@ -131,7 +186,7 @@
     });
 
     // ========== Drawing ==========
-    function draw(final = false) {
+    function draw() {
         const W = canvas.clientWidth, H = canvas.clientHeight;
         ctx.clearRect(0, 0, W, H);
 
