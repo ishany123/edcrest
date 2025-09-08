@@ -1,3 +1,4 @@
+/* ---------- Theme variables ---------- */
 :root {
     --bg: #0b1020;
     --panel: #121a34;
@@ -16,6 +17,7 @@ body {
     height: 100%
 }
 
+/* ---------- Body & background ---------- */
 body {
     margin: 0;
     font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Arial, sans-serif;
@@ -23,6 +25,7 @@ body {
     background: radial-gradient(1000px 600px at 10% -10%, #162047 0%, var(--bg) 40%) fixed;
 }
 
+/* ---------- Header ---------- */
 .topbar {
     padding: 16px 20px;
     border-bottom: 1px solid #1c274f
@@ -38,6 +41,7 @@ body {
     font-size: 12px
 }
 
+/* ---------- Main layout: panel + stage ---------- */
 .layout {
     display: grid;
     grid-template-columns: 320px 1fr;
@@ -51,6 +55,7 @@ body {
     }
 }
 
+/* ---------- Controls panel ---------- */
 .panel {
     background: var(--panel);
     border: 1px solid #1c274f;
@@ -95,6 +100,7 @@ button[disabled] {
     color: var(--muted)
 }
 
+/* ---------- Stage (canvas container) ---------- */
 .stage {
     position: relative;
     min-height: 420px;
@@ -104,12 +110,14 @@ button[disabled] {
     background: linear-gradient(#0b1020, #0a0d1f)
 }
 
+/* Canvas gets responsive size from CSS; JS sets its backing store for Hi-DPI */
 #canvas {
     width: 100%;
     height: min(70vh, 650px);
     display: block
 }
 
+/* ---------- Tooltip (click the projectile when paused) ---------- */
 .tooltip {
     position: absolute;
     min-width: 180px;
@@ -143,6 +151,34 @@ button[disabled] {
     color: var(--muted)
 }
 
+/* ---------- Heads-up display (persistent x/y) ---------- */
+.hud {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    background: rgba(13, 20, 48, 0.9);
+    border: 1px solid #2a355f;
+    border-radius: 10px;
+    padding: 8px 10px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+    font-size: 12px;
+    color: var(--text);
+    pointer-events: none;
+}
+
+.hud .row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 120px
+}
+
+.hud .k {
+    color: var(--muted)
+}
+
+
+/* ---------- Footer ---------- */
 .footer {
     padding: 10px 16px;
     color: var(--muted);

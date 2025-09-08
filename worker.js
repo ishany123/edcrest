@@ -1,14 +1,18 @@
 /*
-  Web Worker: Projectile motion with quadratic air resistance, RK4 integrator.
+  Worker thread: integrates projectile motion with quadratic drag using RK4.
+  - Runs at a *paced* 0.25× speed via a fixed-step accumulator (stable timing).
   F_drag = 0.5 * rho * Cd * A * |v_rel| * v_rel,  v_rel = (vx - wind, vy)
   a_x = -(k/m) * |v_rel| * v_rel_x
   a_y = -g     -(k/m) * |v_rel| * v_rel_y
   where k = 0.5 * rho * Cd * A
 */
+
+// Wall-clock pacing (0.25× real-time)
 const SPEED = 0.25
+// Safety cap: prevent any single loop from doing too many physics steps
 const MAX_STEPS = 10;
 
-// Default parameters (edit as needed or extend to accept from main)
+// Default parameters
 const params = {
     v0: 30,           // m/s
     angleDeg: 45,     // degrees
@@ -18,17 +22,18 @@ const params = {
     rho: 1.225,       // kg/m^3 (air density at sea level)
     g: 9.81,          // m/s^2
     wind: 0,          // m/s (tailwind +x)
-    dt: 0.01,         // s
+    dt: 0.005,         // s
     maxT: 20          // s
 };
 
-let running = false;
+// Worker-local state
+let running = false; // loop is active
 let state = null; // {x,y,vx,vy,t}
-let loopTimer = null;
-
-let lastReal = 0;     // ms timestamp of last frame
+let loopTimer = null; // setTimeout handle
+let lastReal = 0;     // ms timestamp of last loop
 let acc = 0;          // accumulated (scaled) seconds to integrate
 
+// Message interface
 self.onmessage = (e) => {
     const msg = e.data;
     try {
@@ -40,7 +45,7 @@ self.onmessage = (e) => {
         } else if (msg.type === 'resume') {
             if (!state) return;
             running = true;
-            lastReal = performance.now();
+            lastReal = performance.now(); // reset wall-clock origin
             loop();
         }
     } catch (err) {
@@ -48,6 +53,7 @@ self.onmessage = (e) => {
     }
 };
 
+// Initialize state, post the initial point, and start paced loop
 function start() {
     const th = (params.angleDeg * Math.PI) / 180;
     state = {
@@ -60,21 +66,34 @@ function start() {
     running = true;
     acc = 0;
     lastReal = performance.now();
+
+    // Seed UI with the exact initial state (so the line starts at the origin)
+    const vmag0 = Math.hypot(state.vx, state.vy);
+    postMessage({
+        type: 'tick',
+        points: [{ x: state.x, y: state.y, t: state.t, v: vmag0 }],
+        state: { x: state.x, y: state.y, t: state.t, vx: state.vx, vy: state.vy, v: vmag0 }
+    });
+
     clearTimer();
     loop();
 }
 
+// Compute acceleration components with quadratic drag
 function accel(vx, vy) {
+    // Drag factor
     const k = 0.5 * params.cd * params.A * params.rho;
+    // Relative velocity (account for wind in +x)
     const vrelx = vx - params.wind;
     const vrely = vy;
     const v = Math.hypot(vrelx, vrely);
+    // Ax, Ay (drag opposite the relative velocity; gravity in -y)
     const ax = -(k / params.m) * v * vrelx;
     const ay = -params.g - (k / params.m) * v * vrely;
     return { ax, ay };
 }
 
-// RK4 step
+// One RK4 integration step on the global `state` with time step dt
 function stepRK4() {
     const dt = params.dt;
     const s = state;
@@ -91,6 +110,7 @@ function stepRK4() {
     const a4 = accel(s.vx + dt * k3.vx, s.vy + dt * k3.vy);
     const k4 = { x: s.vx + dt * k3.vx, y: s.vy + dt * k3.vy, vx: a4.ax, vy: a4.ay };
 
+    // Weighted blend of slopes
     s.x += (dt / 6) * (k1.x + 2 * k2.x + 2 * k3.x + k4.x);
     s.y += (dt / 6) * (k1.y + 2 * k2.y + 2 * k3.y + k4.y);
     s.vx += (dt / 6) * (k1.vx + 2 * k2.vx + 2 * k3.vx + k4.vx);
@@ -98,30 +118,70 @@ function stepRK4() {
     s.t += dt;
 }
 
+// Main paced loop: accumulate wall-clock time × SPEED, then integrate fixed dt steps
 function loop() {
     if (!running) return;
 
+    // 1) How much real time passed since the last frame? Convert to sim time at SPEED.
     const now = performance.now();
     acc += ((now - lastReal) / 1000) * SPEED;
     lastReal = now;
 
+    // 2) Integrate enough dt-steps to "catch up" (bounded by MAX_STEPS)
     const batch = [];
     let steps = 0;
 
     while (acc >= params.dt && steps < MAX_STEPS) {
+        // Keep previous sample to detect ground crossing
+        const prev = { ...state };
+
         stepRK4();
         acc -= params.dt;
         steps++;
 
-        if (state.y < 0 || state.t >= params.maxT) {
+        // Ground-crossing detection: if we stepped from y≥0 to y<0, interpolate the hit
+        if (prev.y >= 0 && state.y < 0) {
+            // Linear interpolation factor alpha where y(alpha) = 0
+            const denom = (prev.y - state.y) || 1e-12;
+            const alpha = prev.y / denom; // in (0,1)
+
+            // Interpolated landing state at y=0
+            const xHit = prev.x + alpha * (state.x - prev.x);
+            const tHit = prev.t + alpha * (state.t - prev.t);
+            const vxHit = prev.vx + alpha * (state.vx - prev.vx);
+            const vyHit = prev.vy + alpha * (state.vy - prev.vy);
+            const vHit = Math.hypot(vxHit, vyHit);
+
+            // First flush any normal points we already accumulated this tick
+            if (batch.length) {
+                postMessage({
+                    type: 'tick',
+                    points: batch,
+                    state: { x: state.x, y: state.y, t: state.t, vx: state.vx, vy: state.vy, v: Math.hypot(state.vx, state.vy) }
+                });
+            }
+
+            // Then send the exact landing point on the ground (y=0)
+            postMessage({
+                type: 'tick',
+                points: [{ x: xHit, y: 0, t: tHit, v: vHit }],
+                state: { x: xHit, y: 0, t: tHit, vx: vxHit, vy: vyHit, v: vHit }
+            });
+
+            // Stop the simulation
             running = false;
-            break;
+            postMessage({ type: 'done' });
+            return;
         }
 
+        // Normal sample
         batch.push({ x: state.x, y: state.y, t: state.t, v: Math.hypot(state.vx, state.vy) });
+
+        // Safety cutoff on time
+        if (state.t >= params.maxT) { running = false; break; }
     }
 
-
+    // 3) Send the batch (if any)
     if (batch.length) {
         postMessage({
             type: 'tick',
@@ -130,6 +190,7 @@ function loop() {
         });
     }
 
+    // 4) If still running, schedule the next paced iteration (~60 Hz UI)
     if (!running) {
         postMessage({ type: 'done' });
         return;
@@ -138,4 +199,5 @@ function loop() {
     loopTimer = setTimeout(loop, 16);
 }
 
+// Clear any pending timer
 function clearTimer() { if (loopTimer) { clearTimeout(loopTimer); loopTimer = null; } }
