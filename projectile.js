@@ -1,36 +1,42 @@
 (() => {
-    // DOM references
-    const canvas = document.getElementById('canvas');
+    // This module instantiates a projectile motion simulation within a
+    // specific section of the lesson page.  It is largely based on
+    // the original `main.js` POC but scopes all DOM queries to a
+    // namespaced set of element IDs so that multiple simulations can
+    // coexist on the same page without interfering with one another.
+
+    // Look up elements by their IDs.  All IDs for the projectile
+    // simulation begin with the prefix `proj_`.
+    const canvas = document.getElementById('proj_canvas');
     const ctx = canvas.getContext('2d');
     const $ = (id) => document.getElementById(id);
 
-    const startBtn = $('startBtn');
-    const pauseBtn = $('pauseBtn');
-    const resetBtn = $('resetBtn');
+    const startBtn = $('proj_startBtn');
+    const pauseBtn = $('proj_pauseBtn');
+    const resetBtn = $('proj_resetBtn');
 
     // Inputs
-    const v0El = $('v0');
-    const angleEl = $('angle');
-    const cdEl = $('cd');
-    const windEl = $('wind');
-    const speedEl = $('speed');
-    const applyBtn = $('applyBtn');
+    const v0El = $('proj_v0');
+    const angleEl = $('proj_angle');
+    const cdEl = $('proj_cd');
+    const windEl = $('proj_wind');
+    const speedEl = $('proj_speed');
+    const applyBtn = $('proj_applyBtn');
 
     // HUD elements
-    const hudXEl = $('hudX');
-    const hudYEl = $('hudY');
-    const tooltip = $('tooltip');
+    const hudXEl = $('proj_hudX');
+    const hudYEl = $('proj_hudY');
+    const tooltip = $('proj_tooltip');
 
-    // Observe container to avoid first-paint race
-    const stageEl = document.querySelector('.stage');
+    // Reference to the simulation container for ResizeObserver
+    const stageEl = document.querySelector('#projectileSim .stage');
 
-    // Hi-DPI support: match the backing store to CSS size * devicePixelRatio
+    // Hi‑DPI support: match the backing store to CSS size * dpr
     function fitCanvas() {
         const dpr = Math.max(1, window.devicePixelRatio || 1);
         const rect = canvas.getBoundingClientRect();
         const cssW = Math.floor(rect.width);
         const cssH = Math.floor(rect.height);
-
         if (cssW <= 0 || cssH <= 0) {
             requestAnimationFrame(fitCanvas);
             return;
@@ -38,13 +44,18 @@
         const bw = Math.max(300, Math.floor(cssW * dpr));
         const bh = Math.max(300, Math.floor(cssH * dpr));
         if (canvas.width !== bw || canvas.height !== bh) {
-            canvas.width = bw; canvas.height = bh;
+            canvas.width = bw;
+            canvas.height = bh;
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         }
         draw();
     }
-    const ro = new ResizeObserver(() => { fitCanvas(); });
-    ro.observe(stageEl);
+    // Set up resize handling.  Guard against browsers/environments that
+    // lack ResizeObserver by falling back to a window resize listener.
+    if (typeof ResizeObserver !== 'undefined' && stageEl) {
+        const ro = new ResizeObserver(() => { fitCanvas(); });
+        ro.observe(stageEl);
+    }
     window.addEventListener('resize', fitCanvas, { passive: true });
     if (document.readyState === 'complete')
         fitCanvas();
@@ -52,21 +63,19 @@
         window.addEventListener('load', fitCanvas, { once: true });
     requestAnimationFrame(fitCanvas);
 
+    // Simulation state (UI side)
+    let worker = null;
+    let running = false;
+    let paused = false;
+    let points = [];
+    let current = { x: 0, y: 0, t: 0, vx: 0, vy: 0, v: 0 };
+    let transforms = null;
 
-    // --- Simulation state (UI side)
-    let worker = null; // Web Worker instance (physics thread)
-    let running = false; // true when the worker is advancing
-    let paused = false; // UI pause state
-    let points = []; // trajectory samples [{x,y,t,v}] for drawing
-    let current = { x: 0, y: 0, t: 0, vx: 0, vy: 0, v: 0 }; // most recent state from worker
-    let transforms = null;   // cached physics→pixel mapping
-
-    // ---- Helpers: read inputs
+    // Helpers: read numeric inputs with fallback
     function num(el, fallback) {
         const n = parseFloat(el.value);
         return Number.isFinite(n) ? n : fallback;
     }
-
     function readParams() {
         return {
             v0: Math.max(0, num(v0El, 30)),
@@ -75,26 +84,20 @@
             wind: num(windEl, 0)
         };
     }
-
     function readSpeed() {
         const s = parseFloat(speedEl.value);
         return Number.isFinite(s) && s > 0 ? s : 0.25;
     }
-
-    // Start/restart with current inputs
+    // Start/restart simulation
     function startWithInputs() {
         if (worker) worker.terminate();
-        worker = new Worker('worker.js');
-
-        // Worker → UI messages
+        worker = new Worker('proj_worker.js');
         worker.onmessage = (e) => {
             const msg = e.data;
             if (msg.type === 'tick') {
-                // Append any new polyline points
                 if (msg.points && msg.points.length) {
                     for (const p of msg.points) points.push(p);
                 }
-                // Latest state (also used for tooltip/HUD)
                 if (msg.state) current = msg.state;
                 draw();
             } else if (msg.type === 'done') {
@@ -107,8 +110,6 @@
                 alert('Worker error: ' + msg.message);
             }
         };
-
-        // reset UI state
         points = [];
         current = { x: 0, y: 0, t: 0, vx: 0, vy: 0, v: 0 };
         running = true;
@@ -118,15 +119,11 @@
         pauseBtn.textContent = 'Pause';
         hideTooltip();
         updateHUD(0, 0);
-        draw(); // draw frame with axes/ticks before points arrive
-
-        // Kick off physics with parameters + speed
+        draw();
         worker.postMessage({ type: 'start', params: readParams(), speed: readSpeed() });
     }
-
     // Controls
     startBtn.addEventListener('click', startWithInputs);
-
     pauseBtn.addEventListener('click', () => {
         if (!running) return;
         if (!paused) {
@@ -140,7 +137,6 @@
             worker.postMessage({ type: 'resume' });
         }
     });
-
     resetBtn.addEventListener('click', () => {
         if (worker) worker.terminate();
         running = false;
@@ -152,28 +148,19 @@
         pauseBtn.textContent = 'Pause';
         hideTooltip();
         updateHUD(0, 0);
-        draw(); // redraw axes/ticks with empty trajectory
+        draw();
     });
-
-    // Apply & Restart with new params
     applyBtn.addEventListener('click', startWithInputs);
-
-    // Live-change sim speed while running
     speedEl.addEventListener('change', () => {
         if (worker) worker.postMessage({ type: 'setSpeed', speed: readSpeed() });
     });
-
-    // Only allow clicking the projectile when paused or finished
+    // Click to show tooltip when paused or finished
     canvas.addEventListener('click', (e) => {
         if (running && !paused) return;
         if (!points.length) return;
-
-        // Mouse in canvas CSS pixels
         const rect = canvas.getBoundingClientRect();
         const mx = e.clientX - rect.left;
         const my = e.clientY - rect.top;
-
-        // Hit test against the projectile (12 px radius)
         const { sx, sy } = getTransforms();
         const px = sx(current.x);
         const py = sy(current.y);
@@ -184,20 +171,15 @@
             hideTooltip();
         }
     });
-
-    // ========== Drawing ==========
+    // Drawing functions
     function draw() {
         const W = canvas.clientWidth, H = canvas.clientHeight;
         ctx.clearRect(0, 0, W, H);
-
         const { sx, sy, pad } = getTransforms();
-
         // Grid and axes frame
         grid(ctx, W, H, pad);
-
-        // Numbered tick marks + unit labels (x and y)
+        // Numbered ticks and labels
         drawAxisTicks();
-
         // Trajectory
         if (points.length > 1) {
             ctx.save();
@@ -208,27 +190,16 @@
             for (const p of points) ctx.lineTo(sx(p.x), sy(p.y));
             ctx.stroke();
             ctx.restore();
-
-            // Last point = current projectile position
             const last = points[points.length - 1];
             dot(ctx, sx(last.x), sy(last.y), 5, '#5ec2ff');
-
-            // Keep tooltip anchored to the projectile when visible
             if (!tooltip.classList.contains('hidden')) {
                 positionTooltip(sx(current.x), sy(current.y));
             }
-
-            // Dashed measurement guides (ground distance + height at current x)
             drawMeasurements();
         }
-
-        // Scale bar (meters) in the bottom margin
         drawScaleBar();
-        // Update HUD
         updateHUD(current.x, current.y);
     }
-
-    // Compute physics→pixel transforms. Cache by canvas size and point count.
     function getTransforms() {
         if (transforms &&
             transforms.W === canvas.clientWidth &&
@@ -237,127 +208,113 @@
             return transforms;
         }
         const W = canvas.clientWidth, H = canvas.clientHeight;
-
-        // Padded inner plotting area so ticks/labels don’t clip
         const pad = { top: 16, right: 16, bottom: 44, left: 56 };
-
         const innerW = Math.max(1, W - pad.left - pad.right);
         const innerH = Math.max(1, H - pad.top - pad.bottom);
-
-        // Extents in meters (fallbacks so early frames still look sane)
         const maxX = Math.max(10, ...points.map(p => p.x));
         const maxY = Math.max(5, ...points.map(p => p.y));
-
-        // Linear mapping (independent scales for x and y)
         const sx = (x) => pad.left + (x / Math.max(1, maxX)) * innerW;
         const sy = (y) => H - pad.bottom - (y / Math.max(1, maxY)) * innerH;
-
         transforms = { sx, sy, pad, maxX, maxY, W, H, innerW, innerH, N: points.length };
         return transforms;
     }
-
-    // Draw grid lines and axes aligned to the padded plot area
     function grid(c, W, H, pad) {
         const left = pad.left, right = W - pad.right;
         const top = pad.top, bottom = H - pad.bottom;
-
         c.save();
-        // Background grid (visual aid only; not tied to meters)
-        c.strokeStyle = '#1c274f'; c.lineWidth = 1;
+        // Draw background grid lines aligned to world coordinate ticks
+        const { sx, sy, maxX, maxY } = getTransforms();
+        const stepX = niceStep(maxX, 8);
+        const stepY = niceStep(maxY, 8);
+        c.strokeStyle = '#1c274f';
+        c.lineWidth = 1;
         c.beginPath();
-        for (let x = left; x <= right; x += 40) { c.moveTo(x, top); c.lineTo(x, bottom); }
-        for (let y = top; y <= bottom; y += 40) { c.moveTo(left, y); c.lineTo(right, y); }
+        // vertical grid lines for multiples of stepX from 0 to maxX
+        for (let x = 0; x <= maxX + 1e-9; x += stepX) {
+            const px = sx(x);
+            c.moveTo(px, top);
+            c.lineTo(px, bottom);
+        }
+        // horizontal grid lines for multiples of stepY from 0 to maxY
+        for (let y = 0; y <= maxY + 1e-9; y += stepY) {
+            const py = sy(y);
+            c.moveTo(left, py);
+            c.lineTo(right, py);
+        }
         c.stroke();
-
-        // Axes
+        // Draw border lines for the axes (bottom and left)
         c.strokeStyle = '#2a355f';
         c.beginPath();
-        c.moveTo(left, bottom); c.lineTo(right, bottom); // x-axis
-        c.moveTo(left, bottom); c.lineTo(left, top);     // y-axis
+        c.moveTo(left, bottom);
+        c.lineTo(right, bottom);
+        c.moveTo(left, bottom);
+        c.lineTo(left, top);
         c.stroke();
         c.restore();
     }
-
-    // Tick marks + numeric labels + axis unit labels
     function drawAxisTicks() {
         const { sx, sy, pad, maxX, maxY, W, H } = getTransforms();
         const bottom = H - pad.bottom, left = pad.left;
-
-        // X ticks
-        {
-            const stepX = niceStep(maxX, 8);
-            const decX = tickDecimals(stepX);
-            ctx.save();
-            ctx.strokeStyle = '#2a355f';
-            ctx.fillStyle = '#9aa3b2';
-            ctx.lineWidth = 1;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-            for (let x = 0; x <= maxX + 1e-9; x += stepX) {
-                const X = sx(x);
-                ctx.beginPath(); ctx.moveTo(X, bottom); ctx.lineTo(X, bottom + 6); ctx.stroke();
-                ctx.fillText(x.toFixed(decX), X, bottom + 8);
-            }
-            ctx.fillText('x (m)', W - pad.right - 28, bottom + 28);
-            ctx.restore();
+        // X axis ticks
+        const stepX = niceStep(maxX, 8);
+        const decX = tickDecimals(stepX);
+        ctx.save();
+        ctx.strokeStyle = '#2a355f';
+        ctx.fillStyle = '#9aa3b2';
+        ctx.lineWidth = 1;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        for (let x = 0; x <= maxX + 1e-9; x += stepX) {
+            const X = sx(x);
+            ctx.beginPath(); ctx.moveTo(X, bottom); ctx.lineTo(X, bottom + 6); ctx.stroke();
+            ctx.fillText(x.toFixed(decX), X, bottom + 8);
         }
-
-        // Y ticks
-        {
-            const stepY = niceStep(maxY, 8);
-            const decY = tickDecimals(stepY);
-            ctx.save();
-            ctx.strokeStyle = '#2a355f';
-            ctx.fillStyle = '#9aa3b2';
-            ctx.lineWidth = 1;
-            ctx.textAlign = 'right';
-            ctx.textBaseline = 'middle';
-            for (let y = 0; y <= maxY + 1e-9; y += stepY) {
-                const Y = sy(y);
-                ctx.beginPath(); ctx.moveTo(left - 6, Y); ctx.lineTo(left, Y); ctx.stroke();
-                ctx.fillText(y.toFixed(decY), left - 8, Y);
-            }
-            // Unit label (rotated)
-            ctx.save();
-            ctx.translate(left - 32, pad.top + 14);
-            ctx.rotate(-Math.PI / 2);
-            ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-            ctx.fillText('y (m)', 0, 0);
-            ctx.restore();
-            ctx.restore();
+        ctx.fillText('x (m)', W - pad.right - 28, bottom + 28);
+        ctx.restore();
+        // Y axis ticks
+        const stepY = niceStep(maxY, 8);
+        const decY = tickDecimals(stepY);
+        ctx.save();
+        ctx.strokeStyle = '#2a355f';
+        ctx.fillStyle = '#9aa3b2';
+        ctx.lineWidth = 1;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        for (let y = 0; y <= maxY + 1e-9; y += stepY) {
+            const Y = sy(y);
+            ctx.beginPath(); ctx.moveTo(left - 6, Y); ctx.lineTo(left, Y); ctx.stroke();
+            ctx.fillText(y.toFixed(decY), left - 8, Y);
         }
+        ctx.save();
+        ctx.translate(left - 32, pad.top + 14);
+        ctx.rotate(-Math.PI / 2);
+        ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+        ctx.fillText('y (m)', 0, 0);
+        ctx.restore();
+        ctx.restore();
     }
-
-    // Draw dashed guides (origin->current x on ground, and vertical up to current y)
     function drawMeasurements() {
         const { sx, sy } = getTransforms();
         const x0 = sx(0), y0 = sy(0);
         const xC = sx(current.x), yC = sy(current.y);
-
         ctx.save();
         ctx.setLineDash([6, 6]);
         ctx.lineWidth = 2;
         ctx.strokeStyle = '#6a98ff88';
-
         ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(xC, y0); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(xC, y0); ctx.lineTo(xC, yC); ctx.stroke();
         ctx.restore();
     }
-
-    // Scale bar in meters (uses the same sx mapping)
     function drawScaleBar() {
         const { sx, pad, maxX, H } = getTransforms();
-        const step = niceStep(maxX, 6); // choose a “nice” metric length: 1, 2, 5 × 10^k
-        const px = sx(step) - sx(0); // convert that many meters to pixels
-
-        const y = H - pad.bottom + 22;  // place inside the bottom margin
+        const step = niceStep(maxX, 6);
+        const px = sx(step) - sx(0);
+        const y = H - pad.bottom + 22;
         const x = pad.left;
-
         ctx.save();
         ctx.lineWidth = 3;
         ctx.strokeStyle = '#6a98ff88';
         ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + px, y); ctx.stroke();
-
         ctx.font = '12px system-ui, sans-serif';
         ctx.fillStyle = '#9aa3b2';
         ctx.textAlign = 'center';
@@ -365,34 +322,24 @@
         ctx.fillText(`${step} m`, x + px / 2, y + 4);
         ctx.restore();
     }
-
-    // Utility: choose friendly tick step sizes (1/2/5 × 10^k)
     function niceStep(maxValue, targetTicks = 5) {
         const raw = Math.max(1e-6, maxValue / targetTicks);
         const pow = Math.pow(10, Math.floor(Math.log10(raw)));
         const m = raw / pow;
         return (m >= 5 ? 5 : m >= 2 ? 2 : 1) * pow;
     }
-
-    // Determine decimal places for tick labels based on step
     function tickDecimals(step) {
         const e = Math.max(0, -Math.floor(Math.log10(step)));
         return Math.min(6, e);
     }
-
-    // Draw a filled circle
     function dot(c, x, y, r, color) { c.fillStyle = color; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill(); }
-
-    // HUD updaterv
     function updateHUD(x, y) {
         hudXEl.textContent = `${(x || 0).toFixed(2)} m`;
         hudYEl.textContent = `${(y || 0).toFixed(2)} m`;
     }
-
-    // Tooltip shown when clicking the projectile (paused/finished)
     function showTooltip(px, py) {
-        const m = 0.145; // (kg) 
-        const g = 9.81;  // (m/s^2)
+        const m = 0.145; // same default mass used in the worker
+        const g = 9.81;
         const KE = 0.5 * m * current.v * current.v;
         const PE = m * g * Math.max(0, current.y);
         tooltip.innerHTML = `
@@ -409,8 +356,6 @@
         tooltip.classList.remove('hidden');
         positionTooltip(px, py);
     }
-
-    // Keep tooltip inside the stage viewport
     function positionTooltip(px, py) {
         const stageRect = canvas.getBoundingClientRect();
         const ttRect = tooltip.getBoundingClientRect();
