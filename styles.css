@@ -190,7 +190,8 @@ button[disabled] {
 .hud {
     position: absolute;
     top: 12px;
-    left: 12px;
+    right: 12px;
+    left: auto;
     background: rgba(13, 20, 48, 0.9);
     border: 1px solid #2a355f;
     border-radius: 10px;
@@ -218,4 +219,66 @@ button[disabled] {
     padding: 10px 16px;
     color: var(--muted);
     border-top: 1px solid #1c274f
+}
+
+/* ---------- Lesson-specific layout ---------- */
+/* Header for the lesson demo.  Centres the title and subtitle and
+ * gives them breathing space above the simulations. */
+.lesson-header {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 32px 20px 16px;
+}
+.lesson-header h1 {
+    margin: 0 0 8px 0;
+    font-size: 24px;
+}
+.lesson-header .muted {
+    color: var(--muted);
+    font-size: 14px;
+    margin: 0;
+}
+/* Container wrapping all lesson sections.  Centres the simulations on
+ * the page and constrains their maximum width. */
+.lesson-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px 60px;
+}
+/* Provide spacing between each major section (projectile vs momentum). */
+.lesson-section {
+    margin-bottom: 64px;
+}
+/* Simulation containers use a two‑column grid layout: fixed controls
+ * and flexible canvas.  On smaller screens they collapse to a single
+ * column. */
+.simulation-container {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 24px;
+    align-items: start;
+}
+@media (max-width: 900px) {
+    .simulation-container {
+        grid-template-columns: 1fr;
+    }
+}
+/* Increase the minimum height of stages so that simulations occupy
+ * more vertical space when available. */
+.stage {
+    position: relative;
+    min-height: 480px;
+    border: 1px solid #1c274f;
+    border-radius: 12px;
+    overflow: hidden;
+    background: linear-gradient(#0b1020, #0a0d1f);
+}
+/* Increase the maximum height of canvases to let the graphs fill more
+ * of the viewport on larger screens. */
+#proj_canvas,
+#mom_canvas,
+canvas {
+    width: 100%;
+    height: min(75vh, 720px);
+    display: block;
 }

@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Physics Lesson Demo – Projectile Motion & Momentum</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+    <header class="lesson-header">
+        <h1>Physics Lesson: Projectile Motion &amp; Momentum</h1>
+        <p class="muted">Explore projectile motion with air resistance and an elastic collision between two bodies. Adjust parameters and observe the physics in real time.</p>
+    </header>
+
+    <main class="lesson-container">
+        <!-- Projectile Simulation Section -->
+        <section class="lesson-section">
+            <h2>Projectile Motion Simulation</h2>
+            <p class="muted">Launch a projectile with configurable initial velocity, angle, drag and wind. Pause the simulation to inspect kinetic and potential energy.</p>
+            <div id="projectileSim" class="simulation-container">
+                <section class="panel">
+                    <h2>Controls</h2>
+                    <div class="row buttons">
+                        <button id="proj_startBtn">Start</button>
+                        <button id="proj_pauseBtn" disabled>Pause</button>
+                        <button id="proj_resetBtn">Reset</button>
+                    </div>
+                    <form class="form-grid" autocomplete="off">
+                        <label>
+                            <span>Initial Velocity v₀ (m/s)</span>
+                            <input id="proj_v0" type="number" step="0.1" min="0" value="30" />
+                        </label>
+                        <label>
+                            <span>Launch Angle (°)</span>
+                            <input id="proj_angle" type="number" step="0.1" min="0" max="90" value="45" />
+                        </label>
+                        <label>
+                            <span>Drag Coefficient Cᵈ</span>
+                            <input id="proj_cd" type="number" step="0.01" min="0" value="0.47" />
+                        </label>
+                        <label>
+                            <span>Wind (m/s)</span>
+                            <input id="proj_wind" type="number" step="0.1" value="0" />
+                        </label>
+                        <label>
+                            <span>Simulation Speed</span>
+                            <select id="proj_speed">
+                                <option value="0.25" selected>0.25×</option>
+                                <option value="0.5">0.5×</option>
+                                <option value="1">1×</option>
+                                <option value="2">2×</option>
+                            </select>
+                        </label>
+                        <div class="row">
+                            <button id="proj_applyBtn" type="button" class="secondary">Apply &amp; Restart</button>
+                        </div>
+                    </form>
+                    <details class="help" open>
+                        <summary>About this simulation</summary>
+                        <ul>
+                            <li>Numerics run in a Web Worker; UI draws on Canvas.</li>
+                            <li>Click the projectile after pausing to view details.</li>
+                        </ul>
+                    </details>
+                </section>
+                <section class="stage">
+                    <canvas id="proj_canvas" aria-label="Projectile simulation canvas" role="img"></canvas>
+                    <div id="proj_tooltip" class="tooltip hidden" role="dialog" aria-live="polite"></div>
+                    <div class="hud" id="proj_hud" role="status" aria-live="polite">
+                        <div class="row"><span class="k">x</span><span id="proj_hudX">0.00 m</span></div>
+                        <div class="row"><span class="k">y</span><span id="proj_hudY">0.00 m</span></div>
+                    </div>
+                </section>
+            </div>
+        </section>
+
+        <!-- Momentum Simulation Section -->
+        <section class="lesson-section">
+            <h2>Momentum &amp; Collision Simulation</h2>
+            <p class="muted">Configure masses, radii, velocities and positions of two bodies. Observe their trajectories and compare momentum before and after an elastic collision.</p>
+            <div id="momentumSim" class="simulation-container">
+                <section class="panel">
+                    <h2>Controls</h2>
+                    <div class="row buttons">
+                        <button id="mom_startBtn">Start</button>
+                        <button id="mom_pauseBtn" disabled>Pause</button>
+                        <button id="mom_resetBtn">Reset</button>
+                    </div>
+                    <form class="form-grid" autocomplete="off">
+                        <label>
+                            <span>Mass m₁ (kg)</span>
+                            <input id="mom_m1" type="number" step="0.1" min="0" value="1" />
+                        </label>
+                        <label>
+                            <span>Mass m₂ (kg)</span>
+                            <input id="mom_m2" type="number" step="0.1" min="0" value="1" />
+                        </label>
+                        <label>
+                            <span>Radius r₁ (m)</span>
+                            <!-- Default radius set to 0.25 m -->
+                            <input id="mom_r1" type="number" step="0.05" min="0.1" value="0.25" />
+                        </label>
+                        <label>
+                            <span>Radius r₂ (m)</span>
+                            <!-- Default radius set to 0.25 m -->
+                            <input id="mom_r2" type="number" step="0.05" min="0.1" value="0.25" />
+                        </label>
+                        <label>
+                            <span>Speed v₁ (m/s)</span>
+                            <input id="mom_v1" type="number" step="0.1" min="0" value="5" />
+                        </label>
+                        <label>
+                            <span>Angle θ₁ (°)</span>
+                            <input id="mom_angle1" type="number" step="1" value="0" />
+                        </label>
+                        <label>
+                            <span>Speed v₂ (m/s)</span>
+                            <input id="mom_v2" type="number" step="0.1" min="0" value="5" />
+                        </label>
+                        <label>
+                            <span>Angle θ₂ (°)</span>
+                            <input id="mom_angle2" type="number" step="1" value="180" />
+                        </label>
+                        <label>
+                            <span>Initial x₁ (m)</span>
+                            <input id="mom_x1" type="number" step="0.1" value="-5" />
+                        </label>
+                        <label>
+                            <span>Initial y₁ (m)</span>
+                            <input id="mom_y1" type="number" step="0.1" value="0" />
+                        </label>
+                        <label>
+                            <span>Initial x₂ (m)</span>
+                            <input id="mom_x2" type="number" step="0.1" value="5" />
+                        </label>
+                        <label>
+                            <span>Initial y₂ (m)</span>
+                            <input id="mom_y2" type="number" step="0.1" value="0" />
+                        </label>
+                        <label>
+                            <span>Simulation Speed</span>
+                            <select id="mom_speed">
+                                <option value="0.25" selected>0.25×</option>
+                                <option value="0.5">0.5×</option>
+                                <option value="1">1×</option>
+                                <option value="2">2×</option>
+                            </select>
+                        </label>
+                        <div class="row">
+                            <button id="mom_applyBtn" type="button" class="secondary">Apply &amp; Restart</button>
+                        </div>
+                    </form>
+                    <details class="help" open>
+                        <summary>About this simulation</summary>
+                        <ul>
+                            <li>The two bodies move with constant velocity until they touch.</li>
+                            <li>Upon contact, an elastic collision is resolved using conservation of momentum.</li>
+                            <li>The momentum before and after collision is displayed below the canvas.</li>
+                        </ul>
+                    </details>
+                </section>
+                <section class="stage">
+                    <canvas id="mom_canvas" aria-label="Momentum simulation canvas" role="img"></canvas>
+                    <div class="hud" id="mom_hud" role="status" aria-live="polite">
+                        <div class="row"><span class="k">x₁</span><span id="mom_hud1X">0.00 m</span></div>
+                        <div class="row"><span class="k">y₁</span><span id="mom_hud1Y">0.00 m</span></div>
+                        <div class="row"><span class="k">x₂</span><span id="mom_hud2X">0.00 m</span></div>
+                        <div class="row"><span class="k">y₂</span><span id="mom_hud2Y">0.00 m</span></div>
+                    </div>
+                    <div id="mom_momentumInfo" class="momentum-info"></div>
+                </section>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <span>Proof of Concept • Two interactive physics simulations running in parallel using Web Workers.</span>
+    </footer>
+
+    <!-- Load simulation controllers -->
+    <script src="projectile.js" defer></script>
+    <script src="momentum.js" defer></script>
+</body>
+
+</html>

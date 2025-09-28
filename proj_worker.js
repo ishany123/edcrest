@@ -17,12 +17,12 @@ const defaults = {
     v0: 30,           // m/s
     angleDeg: 45,     // degrees
     m: 0.145,         // kg (baseball-ish)
-    cd: 0.47,         // drag coefficient
+    cd: 0,            // drag coefficient
     A: 0.0042,        // m^2 (cross-sectional area)
     rho: 1.225,       // kg/m^3 (air density at sea level)
     g: 9.81,          // m/s^2
     wind: 0,          // m/s (tailwind +x)
-    dt: 0.005,         // s
+    dt: 0.005,        // s
     maxT: 20          // s
 };
 
